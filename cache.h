@@ -6,6 +6,9 @@ extern map<int,long long int> rk;
 extern int countx;
 extern map<int,long long int> dg;
 extern map<int, vector<int>> rk1;
+extern map<long long int,int> hot;
+extern map<long long int,int> cold;
+extern map<int, vector<int>> rk1;
 // PAGE
 extern uint32_t PAGE_TABLE_LATENCY, SWAP_LATENCY;
 // unordered_map<int,long long int> rk;

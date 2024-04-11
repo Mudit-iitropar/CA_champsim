@@ -1,6 +1,6 @@
 #include "cache.h"
 #include "set.h"
-
+#include<bits/stdc++.h>
 uint64_t l2pf_access = 0;
 map<int,long long int> rk;
 int countx=0;
@@ -1072,6 +1072,7 @@ void CACHE::operate()
           cold[v[i].second]++;
         }
         auto it2 = cold.begin();
+        // rk1 contains all the very cold sets corresponding to a very hot set
         for(auto it1= hot.begin();it1!= hot.end();it1++){
               rk1[it1->first].push_back(it2->first);
               it2++;
@@ -1102,11 +1103,11 @@ void CACHE::operate()
 
 uint32_t CACHE::get_set(uint64_t address)
 {
-    uint32_t xx= (uint32_t) (address & ((1 << lg2(NUM_SET)) - 1)); 
-    if(hot.count(xx)>0){
+    return (uint32_t) (address & ((1 << lg2(NUM_SET)) - 1)); 
+    // if(hot[xx]>0){
       
-    }
-    return xx;
+    // }
+    // return xx;
 }
 
 uint32_t CACHE::get_way(uint64_t address, uint32_t set)
@@ -1181,7 +1182,7 @@ int CACHE::check_hit(PACKET *packet)
     }
 
     // hit
-    int num_val= NUM_WAY;
+    uint32_t num_val= NUM_WAY;
     if(cold[set]){
       num_val=9;
     }
@@ -1199,7 +1200,24 @@ int CACHE::check_hit(PACKET *packet)
             break;
         }
     }
+    if(hot[set]){
+      for(uint32_t set_: rk1[set]){
+        for (uint32_t way=9; way<num_val; way++) {
+          if (block[set_][way].valid && (block[set_][way].tag == packet->address)) {
 
+              match_way = way;
+
+              DP ( if (warmup_complete[packet->cpu]) {
+              cout << "[" << NAME << "] " << __func__ << " instr_id: " << packet->instr_id << " type: " << +packet->type << hex << " addr: " << packet->address;
+              cout << " full_addr: " << packet->full_addr << " tag: " << block[set_][way].tag << " data: " << block[set_][way].data << dec;
+              cout << " set: " << set_ << " way: " << way << " lru: " << block[set_][way].lru;
+              cout << " event: " << packet->event_cycle << " cycle: " << current_core_cycle[cpu] << endl; });
+
+              break;
+          }
+        }
+      }
+    }
     return match_way;
 }
 
