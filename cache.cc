@@ -1204,7 +1204,8 @@ int CACHE::check_hit(PACKET *packet)
         }
     }
     if(hot[set]){
-      for(uint32_t set_: rk1[set]){
+      for(uint32_t j=0;j<rk1[set].size();j++){
+        uint32_t set_=rk1[set][j];
         for (uint32_t way=9; way<num_val; way++) {
           if (block[set_][way].valid && (block[set_][way].tag == packet->address)) {
 
