@@ -1065,6 +1065,9 @@ void CACHE::operate()
           v.push_back({dg[i],i});
         }
         sort(v.begin(),v.end());
+        hot.clear();
+        cold.clear();
+        rk1.clear();
         for(int i=0;i<63;i++){
           hot[v[2047-i].second]++;
         }
