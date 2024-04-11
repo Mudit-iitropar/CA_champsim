@@ -37,7 +37,8 @@ uint32_t CACHE::lru_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const 
         }
     }
     if(hot[set]){
-      for(uint32_t set_: rk1[set]){
+      for(uint32_t j=0;j<rk1[set].size();j++){
+        uint32_t set_=rk1[set][j];
         for (way=9; way<num_way; way++) {
             if (block[set_][way].valid == false) {
 
@@ -74,7 +75,8 @@ uint32_t CACHE::lru_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const 
         }
         if(!yes){
             // it means no victim found in very hot set till now 
-            for(uint32_t set_: rk1[set]){
+            for(uint32_t j=0;j<rk1[set].size();j++){
+                uint32_t set_=rk1[set][j];
                 for (way=9; way<num_way; way++) {
                     if (block[set_][way].lru == max_-1) {
 
@@ -111,7 +113,8 @@ void CACHE::lru_update(uint32_t set, uint32_t way)
         }
     }
     if(hot[set]){
-        for(uint32_t set_: rk1[set]){
+        for(uint32_t j=0;j<rk1[set].size();j++){
+            uint32_t set_=rk1[set][j];
             for (uint32_t i=9; i<num_way; i++) {
                 if (block[set_][i].lru < block[set_][way].lru) {
                     block[set_][i].lru++;
