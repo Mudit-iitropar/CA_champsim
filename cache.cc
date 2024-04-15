@@ -859,7 +859,6 @@ void CACHE::handle_prefetch()
                 // update replacement policy
                 if (cache_type == IS_LLC) {
                     llc_update_replacement_state(prefetch_cpu, set, way, block[set][way].full_addr, PQ.entry[index].ip, 0, PQ.entry[index].type, 1);
-
                 }
                 else
                     update_replacement_state(prefetch_cpu, set, way, block[set][way].full_addr, PQ.entry[index].ip, 0, PQ.entry[index].type, 1);
@@ -1075,8 +1074,11 @@ void CACHE::operate()
 //     return NUM_WAY;
 // }    
         // for()
+        if(cache_type == IS_LLC){
+          cout<<"DEEPANSHU THE KING\n";
         for(int i=0;i<2048;i++){
-          if(hot[i] && cold[i]){
+          if(hot
+          [i] || cold[i]){
             for(int j=0;j<16;j++){
               block[i][j].lru=j;
             }
@@ -1106,28 +1108,59 @@ void CACHE::operate()
         for(int i=0;i<315;i++){
           cold[v[i].second]++;
         }
+        // printing order of sets 
+        // for(int i=0;i<2048;i++){
+        //   cout<<v[i].second<<" ";
+        // }cout<<endl;
         auto it2 = cold.begin();
+        cout<<"rk1\n";
+
         for(auto it1= hot.begin();it1!= hot.end();it1++){
-              rk1[it1->first].push_back({it2->second,0});
+              rk1[it1->first].push_back({it2->first,0});
               it2++;
-              rk1[it1->first].push_back({it2->second,0});
+              // cout<<it2->second<<" ";
+              rk1[it1->first].push_back({it2->first,0});
               it2++;
-              rk1[it1->first].push_back({it2->second,0});
+              // cout<<it2->second<<" ";
+              rk1[it1->first].push_back({it2->first,0});
               it2++;
-              rk1[it1->first].push_back({it2->second,0});
+              // cout<<it2->second<<" ";
+              rk1[it1->first].push_back({it2->first,0});
               it2++;
-              rk1[it1->first].push_back({it2->second,0});
+              // cout<<it2->second<<" ";
+              rk1[it1->first].push_back({it2->first,0});
               it2++;
+              // cout<<it2->second<<" ";
         }
+        cout<<endl;
         for(auto it=rk1.begin();it!=rk1.end();it++){
+          // if(it->first ==51)cout<<"YES\n";
+          // cout<<"START\n";
           uint32_t ss=16;
           for(auto it1=it->second.begin();it1!=it->second.end();it1++){
-            int temp=it1->second;
+            if(it->first==51){
+              cout<<it1->first<<" it1\n";
+            }
             for(uint32_t way=10;way<16;way++){
               block[it1->first][way].lru=ss++;
+              if(it->first ==51){
+              cout<<block[it1->first][way].lru<<" ";
+              }
             }
           }
         }
+        cout<<"aaaaaaa"<<endl;
+        for(int i=0;i<NUM_WAY;i++){
+          cout<<block[51][i].lru<<" ";
+        }
+        vector<pair<int,int>> set_ = rk1[51];
+        for(auto x:set_){
+          uint32_t rrr=x.first;
+          cout<<"rrr "<<rrr<<endl;
+          for(int i=10;i<16;i++){
+            cout<<block[rrr][i].lru<<" ";
+          }
+        }cout<<"bbbbbbbbbbbb"<<endl;
         // cout<<"HOT ARE:\n";
         // for(int i=0;i<63;i++){
         //   cout<<v[2047-i].second<<endl;
@@ -1141,6 +1174,7 @@ void CACHE::operate()
 
     if (PQ.occupancy && (reads_available_this_cycle > 0))
         handle_prefetch();
+}
 }
 
 uint32_t CACHE::get_set(uint64_t address)
@@ -1214,7 +1248,7 @@ void CACHE::fill_cache(uint32_t set, uint32_t way, PACKET *packet)
 
 int CACHE::check_hit(PACKET *packet)
 {
-    cout<<"HIT\n";
+    
     uint32_t set = get_set(packet->address);
     int match_way = -1;
     temp_set=set;
