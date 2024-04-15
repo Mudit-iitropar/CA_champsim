@@ -51,13 +51,17 @@ uint32_t CACHE::lru_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const 
             
         }
     // LRU victim
-    uint32_t max_=num_way-1;
+    uint32_t max_=num_way+6*5-1;
     if(hot[set] && cache_type== IS_LLC){
+        // cout<<"Hot LRU "<<endl;
         // upper limit=6 in each cold set
-        max_=num_way+6*5-1;
+        max_=num_way-1;
     }
     if (way == num_way) {
         for (way=0; way<num_way; way++) {
+            // if(hot[set]){
+            //     cout<<block[set][way].lru<<" ";
+            // }
             if (block[set][way].lru == max_) {
                 DP ( if (warmup_complete[cpu]) {
                 cout << "[" << NAME << "] " << __func__ << " instr_id: " << instr_id << " replace set: " << set << " way: " << way;
@@ -68,11 +72,13 @@ uint32_t CACHE::lru_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const 
         }   
     }
     if(hot[set] && cache_type== IS_LLC){
-        vector<pair<int,int>> set_=rk1[set];
+        vector<pair<int,int>> set_ = rk1[set];
         for(auto x:set_){
             uint32_t rrr=x.first;
             for (way=10; way<num_way; way++) {
+                // cout<< block[rrr][way].lru<<" ";
                 if (block[rrr][way].lru == max_) {
+
                     DP ( if (warmup_complete[cpu]) {
                     cout << "[" << NAME << "] " << __func__ << " instr_id: " << instr_id << " replace set: " << rrr << " way: " << way;
                     cout << hex << " address: " << (full_addr>>LOG2_BLOCK_SIZE) << " victim address: " << block[rrr][way].address << " data: " << block[rrr][way].data;
@@ -83,11 +89,26 @@ uint32_t CACHE::lru_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const 
             }
         }
     }
-    if (way == NUM_WAY) {
+    // cout<<"DFERWGEBVC"<<endl;
+    // cout<<temp_set<<" "<<way<<endl;
+     
+    if (way == num_way) {
+        cout<<"lru "<< NUM_WAY<<" ";
+        if(cache_type == IS_L1I){
+            cout<<"YES\n";
+        }
+        for(int i=0;i<NUM_WAY;i++){
+            cout<<block[set][i].lru << " ";
+        }cout<<endl;
+        cout<<"Hot "<<hot[set]<<endl;
+        cout<<"Cold "<<cold[set]<<endl;
+        // return 15;
         cerr << "[" << NAME << "] " << __func__ << " no victim! set: " << set << endl;
         assert(0);
     }
-
+    // if(set == 45){
+    //     cout<< temp_set<<" "<<way<<endl;
+    // }
     return way;
 }
 
@@ -110,6 +131,7 @@ void CACHE::lru_update(uint32_t set, uint32_t way)
     if(hot_set){
         for (uint32_t i=0; i<NUM_WAY; i++) {
             if (block[real_set][i].lru < block[set][way].lru) {
+                cout<<"GHJGKJGKJH\n";
                 block[real_set][i].lru++;
             }
         }
