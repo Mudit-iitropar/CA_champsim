@@ -7,10 +7,13 @@ int countx=0;
 map<int,long long int> dg;
 map<long long int,int> hot;
 map<long long int,int> cold;
-map<int, vector<int>> rk1;
+uint32_t  real_set;
+map<int, vector<pair<int,int>>> rk1;
+int temp_set;
+bool hot_set=false;
 void CACHE::handle_fill()
 {
-  
+
     // handle fill
     uint32_t fill_cpu = (MSHR.next_fill_index == MSHR_SIZE) ? NUM_CPUS : MSHR.entry[MSHR.next_fill_index].cpu;
     if (fill_cpu == NUM_CPUS)
@@ -31,6 +34,7 @@ void CACHE::handle_fill()
         rk[set]++;
         if (cache_type == IS_LLC) {
             way = llc_find_victim(fill_cpu, MSHR.entry[mshr_index].instr_id, set, block[set], MSHR.entry[mshr_index].ip, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].type);
+            set =temp_set;
         }
         else
             way = find_victim(fill_cpu, MSHR.entry[mshr_index].instr_id, set, block[set], MSHR.entry[mshr_index].ip, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].type);
@@ -41,7 +45,6 @@ void CACHE::handle_fill()
             // update replacement policy
             if (cache_type == IS_LLC) {
                 llc_update_replacement_state(fill_cpu, set, way, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].ip, 0, MSHR.entry[mshr_index].type, 0);
-
             }
             else
                 update_replacement_state(fill_cpu, set, way, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].ip, 0, MSHR.entry[mshr_index].type, 0);
@@ -247,7 +250,7 @@ void CACHE::handle_writeback()
         // access cache
         uint32_t set = get_set(WQ.entry[index].address);
         int way = check_hit(&WQ.entry[index]);
-        
+        set= temp_set;
         if (way >= 0) { // writeback hit (or RFO hit for L1D)
 
             if (cache_type == IS_LLC) {
@@ -407,6 +410,7 @@ void CACHE::handle_writeback()
                 uint32_t set = get_set(WQ.entry[index].address), way;
                 if (cache_type == IS_LLC) {
                     way = llc_find_victim(writeback_cpu, WQ.entry[index].instr_id, set, block[set], WQ.entry[index].ip, WQ.entry[index].full_addr, WQ.entry[index].type);
+                    set= temp_set;
                 }
                 else
                     way = find_victim(writeback_cpu, WQ.entry[index].instr_id, set, block[set], WQ.entry[index].ip, WQ.entry[index].full_addr, WQ.entry[index].type);
@@ -546,7 +550,7 @@ void CACHE::handle_read()
             uint32_t set = get_set(RQ.entry[index].address);
             dg[set]++;
             int way = check_hit(&RQ.entry[index]);
-            
+            set= temp_set;
             if (way >= 0) { // read hit
 
                 if (cache_type == IS_ITLB) {
@@ -849,7 +853,7 @@ void CACHE::handle_prefetch()
             // access cache
             uint32_t set = get_set(PQ.entry[index].address);
             int way = check_hit(&PQ.entry[index]);
-            
+            set = temp_set;
             if (way >= 0) { // prefetch hit
 
                 // update replacement policy
@@ -1060,14 +1064,42 @@ void CACHE::operate()
     handle_read();
     vector<pair<long long int,int>>v;
     if(countx % 100000==0){
+      // map< int,vactor<pair<int,int>>> 
+//       uint32_t CACHE::get_way(uint64_t address, uint32_t set)
+// {
+//     for (uint32_t way=0; way<NUM_WAY; way++) {
+//         if (block[set][way].valid && (block[set][way].tag == address)) 
+//             return way;
+//     }
+
+//     return NUM_WAY;
+// }    
+        // for()
+        for(int i=0;i<2048;i++){
+          if(hot[i] && cold[i]){
+            for(int j=0;j<16;j++){
+              block[i][j].lru=j;
+            }
+          }
+        }
+        for(auto it=rk1.begin();it!=rk1.end();it++){
+          for(auto it1=it->second.begin();it1!=it->second.end();it1++){
+            int temp=it1->second;
+            for(uint32_t way=10;way<NUM_WAY;way++){
+              if(block[it1->first][way].valid){
+                block[it1->first][way].valid=0;
+              }
+              // block[it1->first][way].lru=ss++;
+            }
+          }
+        }
+        hot.clear();
+        cold.clear();
         rk1.clear();
         for(int i=0;i<2048;i++){
           v.push_back({dg[i],i});
         }
         sort(v.begin(),v.end());
-        hot.clear();
-        cold.clear();
-        rk1.clear();
         for(int i=0;i<63;i++){
           hot[v[2047-i].second]++;
         }
@@ -1075,20 +1107,27 @@ void CACHE::operate()
           cold[v[i].second]++;
         }
         auto it2 = cold.begin();
-        // rk1 contains all the very cold sets corresponding to a very hot set
         for(auto it1= hot.begin();it1!= hot.end();it1++){
-              rk1[it1->first].push_back(it2->first);
+              rk1[it1->first].push_back({it2->second,0});
               it2++;
-              rk1[it1->first].push_back(it2->first);
+              rk1[it1->first].push_back({it2->second,0});
               it2++;
-              rk1[it1->first].push_back(it2->first);
+              rk1[it1->first].push_back({it2->second,0});
               it2++;
-              rk1[it1->first].push_back(it2->first);
+              rk1[it1->first].push_back({it2->second,0});
               it2++;
-              rk1[it1->first].push_back(it2->first);
+              rk1[it1->first].push_back({it2->second,0});
               it2++;
         }
-        
+        for(auto it=rk1.begin();it!=rk1.end();it++){
+          uint32_t ss=16;
+          for(auto it1=it->second.begin();it1!=it->second.end();it1++){
+            int temp=it1->second;
+            for(uint32_t way=10;way<16;way++){
+              block[it1->first][way].lru=ss++;
+            }
+          }
+        }
         // cout<<"HOT ARE:\n";
         // for(int i=0;i<63;i++){
         //   cout<<v[2047-i].second<<endl;
@@ -1106,13 +1145,14 @@ void CACHE::operate()
 
 uint32_t CACHE::get_set(uint64_t address)
 {
-    return (uint32_t) (address & ((1 << lg2(NUM_SET)) - 1)); 
-    // if(hot[xx]>0){
-      
-    // }
-    // return xx;
+    uint32_t xx= (uint32_t) (address & ((1 << lg2(NUM_SET)) - 1)); 
+    real_set=xx;
+    return xx;
 }
-
+// uint32_t get_set_vector(uint32_t set)
+// {
+    
+// }
 uint32_t CACHE::get_way(uint64_t address, uint32_t set)
 {
     for (uint32_t way=0; way<NUM_WAY; way++) {
@@ -1174,9 +1214,10 @@ void CACHE::fill_cache(uint32_t set, uint32_t way, PACKET *packet)
 
 int CACHE::check_hit(PACKET *packet)
 {
+    cout<<"HIT\n";
     uint32_t set = get_set(packet->address);
     int match_way = -1;
-
+    temp_set=set;
     if (NUM_SET < set) {
         cerr << "[" << NAME << "_ERROR] " << __func__ << " invalid set index: " << set << " NUM_SET: " << NUM_SET;
         cerr << " address: " << hex << packet->address << " full_addr: " << packet->full_addr << dec;
@@ -1185,8 +1226,8 @@ int CACHE::check_hit(PACKET *packet)
     }
 
     // hit
-    uint32_t num_val= NUM_WAY;
-    if(cold[set]){
+    int num_val= NUM_WAY;
+    if(cold[set] && cache_type== IS_LLC){
       num_val=9;
     }
     for (uint32_t way=0; way<num_val; way++) {
@@ -1203,25 +1244,29 @@ int CACHE::check_hit(PACKET *packet)
             break;
         }
     }
-    if(hot[set]){
-      for(uint32_t j=0;j<rk1[set].size();j++){
-        uint32_t set_=rk1[set][j];
-        for (uint32_t way=9; way<num_val; way++) {
-          if (block[set_][way].valid && (block[set_][way].tag == packet->address)) {
 
-              match_way = way;
+    if(match_way ==-1 && cache_type== IS_LLC && hot[set]){
+      // vector<pair<int,int>> set_ = rk1[set];
+        for(auto set_:rk1[set]){
+            for (uint32_t way=10; way<num_val; way++) {
+              if (block[set_.first][way].valid && (block[set_.first][way].tag == packet->address)) {
 
-              DP ( if (warmup_complete[packet->cpu]) {
-              cout << "[" << NAME << "] " << __func__ << " instr_id: " << packet->instr_id << " type: " << +packet->type << hex << " addr: " << packet->address;
-              cout << " full_addr: " << packet->full_addr << " tag: " << block[set_][way].tag << " data: " << block[set_][way].data << dec;
-              cout << " set: " << set_ << " way: " << way << " lru: " << block[set_][way].lru;
-              cout << " event: " << packet->event_cycle << " cycle: " << current_core_cycle[cpu] << endl; });
+                  match_way = way;
+                  temp_set= set_.first;
+                  DP ( if (warmup_complete[packet->cpu]) {
+                  cout << "[" << NAME << "] " << __func__ << " instr_id: " << packet->instr_id << " type: " << +packet->type << hex << " addr: " << packet->address;
+                  cout << " full_addr: " << packet->full_addr << " tag: " << block[set_][way].tag << " data: " << block[set][way].data << dec;
+                  cout << " set: " << set_ << " way: " << way << " lru: " << block[set_][way].lru;
+                  cout << " event: " << packet->event_cycle << " cycle: " << current_core_cycle[cpu] << endl; });
 
-              break;
+                  break;
+              }
           }
         }
-      }
     }
+
+
+
     return match_way;
 }
 
