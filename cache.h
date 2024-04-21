@@ -2,18 +2,15 @@
 #define CACHE_H
 
 #include "memory_class.h"
-extern map<int,long long int> rk;
-extern int countx;
-extern map<int,long long int> dg;
-extern map<int, vector<pair<int,int>>> rk1;
-extern map<long long int,int> hot;
-extern map<long long int,int> cold;
-extern bool hot_set;
-extern uint32_t real_set;
-extern int temp_set;
+extern int num_iterations;
+extern map<int,int> access; //number of access of a specific set
+extern map<int,int> hot;
+extern map<int,int> cold;
+extern map<int,vector<int>> assigned; //7 cold sets with 7 ways corresponding to hot set
+extern uint32_t temp_set;
 // PAGE
 extern uint32_t PAGE_TABLE_LATENCY, SWAP_LATENCY;
-// unordered_map<int,long long int> rk;
+
 // CACHE TYPE
 #define IS_ITLB 0
 #define IS_DTLB 1
@@ -133,7 +130,6 @@ class CACHE : public MEMORY {
             block[i] = new BLOCK[NUM_WAY]; 
 
             for (uint32_t j=0; j<NUM_WAY; j++) {
-                
                 block[i][j].lru = j;
             }
         }
