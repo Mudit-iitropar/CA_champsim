@@ -8,7 +8,7 @@ extern map<int,int> hot;
 extern map<int,int> cold;
 extern map<int,vector<int>> assigned; //7 cold sets with 7 ways corresponding to hot set
 extern uint32_t temp_set;
-// PAGE
+// PAGE 
 extern uint32_t PAGE_TABLE_LATENCY, SWAP_LATENCY;
 
 // CACHE TYPE
