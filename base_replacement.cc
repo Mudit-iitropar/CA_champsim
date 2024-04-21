@@ -1,214 +1,114 @@
 #include "cache.h"
 
-uint32_t CACHE::find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t ip, uint64_t full_addr, uint32_t type)
+#define maxRRPV 3
+uint32_t rrpv[2048][16];
+
+// initialize replacement state
+void CACHE::llc_initialize_replacement()
 {
-    // baseline LRU replacement policy for other caches 
-    return lru_victim(cpu, instr_id, set, current_set, ip, full_addr, type); 
-}
-
-void CACHE::update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit)
-{
-    if (type == WRITEBACK) {
-        if (hit) // wrietback hit does not update LRU state
-            return;
-    }
-
-    return lru_update(set, way);
-}
-
-uint32_t CACHE::lru_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t ip, uint64_t full_addr, uint32_t type)
-{
-    uint32_t way = 0;
-
-    // fill invalid line first
-    int num_way=NUM_WAY;
-    if(cold[set] && cache_type== IS_LLC){
-        num_way=9;
-    }
-    for (way=0; way<num_way; way++) {
-        if (block[set][way].valid == false) {
-            DP ( if (warmup_complete[cpu]) {
-            cout << "[" << NAME << "] " << __func__ << " instr_id: " << instr_id << " invalid set: " << set << " way: " << way;
-            cout << hex << " address: " << (full_addr>>LOG2_BLOCK_SIZE) << " victim address: " << block[set][way].address << " data: " << block[set][way].data;
-            cout << dec << " lru: " << block[set][way].lru << endl; });
-            return way;
+    cout<<"LLC "<<LLC_SET<<endl;
+    cout<<maxRRPV<<endl;
+    cout << "Initialize SRRIP state" << endl;
+    cout<<"checkpoint\n";
+    for (int i=0; i<LLC_SET-1; i++) {
+        for (int j=0; j<LLC_WAY; j++) {
+            if(i>=2047){
+                cout<<"LLC_WAY "<<LLC_WAY<<" "<<LLC_SET<<endl;
+                cout<<i<<" "<<j<<endl;
+            }
+            rrpv[i][j] = maxRRPV;
+            if(i>=2047){
+                cout<<"CCC\n";
+            }
+        }
+        if(i>=2047){
+            cout<<"BBB\n";
         }
     }
-    temp_set=set;
-    // map<int,vector<pair<int,int>>>
-    if(hot[set] && cache_type== IS_LLC){
-            vector<pair<int,int>> set_=rk1[set];
-                for(auto it= set_.begin();it!= set_.end();it++){
-                    int temp= it->first;
-                    for(int i= NUM_WAY-1;i>=10;i--){
-                        if(!block[temp][i].valid){
-                            way =i;
-                            temp_set= temp;
-                            return i;
-                        }
+    cout<<"AAA\n";
+}
+
+// find replacement victim
+uint32_t CACHE::llc_find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t ip, uint64_t full_addr, uint32_t type)
+{
+    temp_set = set;
+    // look for the maxRRPV line
+    while (1)
+    {   
+        int num_ways=LLC_WAY;
+        if(cold[set] && cache_type==IS_LLC){
+            num_ways=9;
+        }
+
+        for (int i=0; i<num_ways; i++)
+            if (rrpv[set][i] == maxRRPV)
+                return i;
+        if(hot[set] && cache_type==IS_LLC){
+            vector<int>temp= assigned[set];
+        for(int j=0;j<temp.size();j++){
+            int set_= temp[j];
+            for(int i=9;i<num_ways;i++){
+                    if(rrpv[set_][i] == maxRRPV){
+                        temp_set= set_;
+                        return i;
                     }
-                }
-            
-        }
-    // LRU victim
-    int max_= num_way -1;
-    if(hot[set] && cache_type== IS_LLC){
-        // cout<<"Hot LRU "<<endl;
-        // upper limit=6 in each cold set
-        max_==num_way+6*5-1;
-    }
-    if (way == num_way) {
-        for (way=0; way<num_way; way++) {
-            // if(hot[set]){
-            //     cout<<block[set][way].lru<<" ";
-            // }
-            if (block[set][way].lru == max_) {
-                DP ( if (warmup_complete[cpu]) {
-                cout << "[" << NAME << "] " << __func__ << " instr_id: " << instr_id << " replace set: " << set << " way: " << way;
-                cout << hex << " address: " << (full_addr>>LOG2_BLOCK_SIZE) << " victim address: " << block[set][way].address << " data: " << block[set][way].data;
-                cout << dec << " lru: " << block[set][way].lru << endl; });
-                break;
-            }
-        }   
-    }
-    if(hot[set] && cache_type== IS_LLC){
-        vector<pair<int,int>> set_ = rk1[set];
-        for(auto x:set_){
-            uint32_t rrr=x.first;
-            for (way=10; way<num_way; way++) {
-                // cout<< block[rrr][way].lru<<" ";
-                if (block[rrr][way].lru == max_) {
-
-                    DP ( if (warmup_complete[cpu]) {
-                    cout << "[" << NAME << "] " << __func__ << " instr_id: " << instr_id << " replace set: " << rrr << " way: " << way;
-                    cout << hex << " address: " << (full_addr>>LOG2_BLOCK_SIZE) << " victim address: " << block[rrr][way].address << " data: " << block[rrr][way].data;
-                    cout << dec << " lru: " << block[rrr][way].lru << endl; });
-                    temp_set=rrr;
-                    break;
-                }
             }
         }
-    }
-    // cout<<"DFERWGEBVC"<<endl;
-    // cout<<temp_set<<" "<<way<<endl;
-     
-    if (way == num_way) {
-        // cout<<"lru "<< NUM_WAY<<" ";
-        // if(cache_type == IS_L1I){
-        //     cout<<"YES\n";
-        // }
-        // for(int i=0;i<NUM_WAY;i++){
-        //     cout<<block[set][i].lru << " ";
-        // }cout<<endl;
-        // cout<<"Hot "<<hot[set]<<endl;
-        // cout<<"Cold "<<cold[set]<<endl;
-        // if(hot[set])cout<<"HOT\n";
-        // else if(cold[set])cout<<"COLD\n";
-        // cout<<max_<<endl;
-        // vector<pair<int,int>> set_ = rk1[set];
-        // for(auto x:set_){
-        // uint32_t rrr=x.first;
-        // for (way=0; way<num_way; way++) {
-        //     cout<<block[rrr][way].lru<<" ";
-        // }
-        // }
-        // for(int i=0;i<NUM_WAY;i++ )cout<<block[set][i].lru<<" ";
-        // cout<<endl;
-        // return 15;
-        cerr << "[" << NAME << "] " << __func__ << " no victim! set: " << set << endl;
-        assert(0);
-    }
-    // if(set == 45){
-    //     cout<< temp_set<<" "<<way<<endl;
-    // }
-    return way;
-}
-
-void CACHE::lru_update(uint32_t set, uint32_t way)
-{
-    // update lru replacement state
-    // hot_set tells if a hot set has sent it or not
-    uint32_t num_way=NUM_WAY,start=0;
-    if(cold[set] && cache_type== IS_LLC && hot_set){
-        start=10;
-    }
-    else if(cold[set] && cache_type== IS_LLC){
-        num_way=9;
-    }
-    for (uint32_t i=start; i<num_way; i++) {
-        if (block[set][i].lru < block[set][way].lru) {
-            block[set][i].lru++;
         }
-    }
-    if(hot_set && cache_type== IS_LLC){
-        for (uint32_t i=0; i<NUM_WAY; i++) {
-            if (block[real_set][i].lru < block[set][way].lru) {
-                // cout<<"GHJGKJGKJH\n";
-                block[real_set][i].lru++;
+
+        for (int i=0; i<LLC_WAY; i++)
+            rrpv[set][i]++;
+        if(hot[set] && cache_type==IS_LLC){
+            vector<int>temp= assigned[set];
+        for(int j=0;j<temp.size();j++){
+            int set_= temp[j];
+            for(int i=9;i<num_ways;i++){
+                    rrpv[set_][i]++;
             }
         }
-        if(rk1.find(real_set)==rk1.end()){
-            block[set][way].lru = 0;
-            return;
-        }
-        vector<pair<int,int>> set_=rk1[real_set];
-        for(auto x:set_){
-        uint32_t rrr=x.first;
-        if(rrr==set){
-            continue;
-        }
-        for(way=num_way-1;way>=10;way--){
-            if(block[rrr][way].lru<block[set][way].lru){
-                block[rrr][way].lru++;
-            }
         }
     }
-    }
-    block[set][way].lru = 0;
-    return;
-    // if(rk1.find(set)==rk1.end()){
-    //     block[set][way].lru = 0;
-    //     return;
-    // }
-    // vector<pair<int,int>> set_=rk1[real_set];
-    // for(auto x:set_){
-    //     uint32_t rrr=x.first,temp=x.second;
-    //     for(way=num_way-1;way>=num_way-temp;way--){
-    //         if(block[rrr][way].lru<block[set][way].lru){
-    //             block[rrr][way].lru++;
-    //         }
-    //     }
-    // }
-}
 
-void CACHE::replacement_final_stats()
-{
-
-}
-
-#ifdef NO_CRC2_COMPILE
-void InitReplacementState()
-{
-    
-}
-
-uint32_t GetVictimInSet (uint32_t cpu, uint32_t set, const BLOCK *current_set, uint64_t PC, uint64_t paddr, uint32_t type)
-{
+    // WE SHOULD NOT REACH HERE
+    assert(0);
     return 0;
 }
 
-void UpdateReplacementState (uint32_t cpu, uint32_t set, uint32_t way, uint64_t paddr, uint64_t PC, uint64_t victim_addr, uint32_t type, uint8_t hit)
+// called on every cache hit and cache fill
+void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit)
 {
+    string TYPE_NAME;
+    if (type == LOAD)
+        TYPE_NAME = "LOAD";
+    else if (type == RFO)
+        TYPE_NAME = "RFO";
+    else if (type == PREFETCH)
+        TYPE_NAME = "PF";
+    else if (type == WRITEBACK)
+        TYPE_NAME = "WB";
+    else
+        assert(0);
+
+    if (hit)
+        TYPE_NAME += "_HIT";
+    else
+        TYPE_NAME += "_MISS";
+
+    if ((type == WRITEBACK) && ip)
+        assert(0);
+
+    // uncomment this line to see the LLC accesses
+    // cout << "CPU: " << cpu << "  LLC " << setw(9) << TYPE_NAME << " set: " << setw(5) << set << " way: " << setw(2) << way;
+    // cout << hex << " paddr: " << setw(12) << paddr << " ip: " << setw(8) << ip << " victim_addr: " << victim_addr << dec << endl;
     
+    if (hit)
+        rrpv[set][way] = 0;
+    else
+        rrpv[set][way] = maxRRPV-1;
 }
 
-void PrintStats_Heartbeat()
+// use this function to print out your own stats at the end of simulation
+void CACHE::llc_replacement_final_stats()
 {
-    
-}
-
-void PrintStats()
-{
 
 }
-#endif
