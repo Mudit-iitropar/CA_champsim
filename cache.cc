@@ -7,6 +7,8 @@ map<int,int> cold;
 map<int,vector<int>> assigned;
 uint64_t l2pf_access = 0;
 uint32_t temp_set;
+uint32_t real_set;
+bool hot_set;
 int num_iterations;
 void CACHE::handle_fill()
 {
@@ -14,9 +16,9 @@ void CACHE::handle_fill()
     // ** DO READ THS
     // WE MAY REMOVE THIS IF CONDITION TO CHECK IPC AS WE CAN KEEP COUNT OF TOTAL NUM OF MISSES INSTEAD OF JUST LLC
     //  *** SHOUD TRY ONCE  **** 
-    if(cache_type==IS_LLC){
+    // if(cache_type==IS_LLC){
       num_iterations++;
-    }
+    // }
     uint32_t fill_cpu = (MSHR.next_fill_index == MSHR_SIZE) ? NUM_CPUS : MSHR.entry[MSHR.next_fill_index].cpu;
     if (fill_cpu == NUM_CPUS)
         return;
@@ -33,6 +35,7 @@ void CACHE::handle_fill()
         // find victim
         uint32_t set = get_set(MSHR.entry[mshr_index].address), way;
         temp_set=set;
+        real_set=set;
         accessed[set]++;
         if (cache_type == IS_LLC) {
             way = llc_find_victim(fill_cpu, MSHR.entry[mshr_index].instr_id, set, block[set], MSHR.entry[mshr_index].ip, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].type);
@@ -98,15 +101,15 @@ void CACHE::handle_fill()
         uint8_t  do_fill = 1;
 
         // is this dirty?
-        if (block[set][way].dirty) {
+        if (block[temp_set][way].dirty) {
 
             // check if the lower level WQ has enough room to keep this writeback request
             if (lower_level) {
-                if (lower_level->get_occupancy(2, block[set][way].address) == lower_level->get_size(2, block[set][way].address)) {
+                if (lower_level->get_occupancy(2, block[temp_set][way].address) == lower_level->get_size(2, block[temp_set][way].address)) {
 
                     // lower level WQ is full, cannot replace this victim
                     do_fill = 0;
-                    lower_level->increment_WQ_FULL(block[set][way].address);
+                    lower_level->increment_WQ_FULL(block[temp_set][way].address);
                     STALL[MSHR.entry[mshr_index].type]++;
 
                     DP ( if (warmup_complete[fill_cpu]) {
@@ -119,9 +122,9 @@ void CACHE::handle_fill()
 
                     writeback_packet.fill_level = fill_level << 1;
                     writeback_packet.cpu = fill_cpu;
-                    writeback_packet.address = block[set][way].address;
-                    writeback_packet.full_addr = block[set][way].full_addr;
-                    writeback_packet.data = block[set][way].data;
+                    writeback_packet.address = block[temp_set][way].address;
+                    writeback_packet.full_addr = block[temp_set][way].full_addr;
+                    writeback_packet.data = block[temp_set][way].data;
                     writeback_packet.instr_id = MSHR.entry[mshr_index].instr_id;
                     writeback_packet.ip = 0; // writeback does not have ip
                     writeback_packet.type = WRITEBACK;
@@ -142,19 +145,19 @@ void CACHE::handle_fill()
         if (do_fill){
             // update prefetcher
 	  if (cache_type == IS_L1I)
-	    l1i_prefetcher_cache_fill(fill_cpu, ((MSHR.entry[mshr_index].ip)>>LOG2_BLOCK_SIZE)<<LOG2_BLOCK_SIZE, set, way, (MSHR.entry[mshr_index].type == PREFETCH) ? 1 : 0, ((block[set][way].ip)>>LOG2_BLOCK_SIZE)<<LOG2_BLOCK_SIZE);
+	    l1i_prefetcher_cache_fill(fill_cpu, ((MSHR.entry[mshr_index].ip)>>LOG2_BLOCK_SIZE)<<LOG2_BLOCK_SIZE, set, way, (MSHR.entry[mshr_index].type == PREFETCH) ? 1 : 0, ((block[temp_set][way].ip)>>LOG2_BLOCK_SIZE)<<LOG2_BLOCK_SIZE);
 	    if (cache_type == IS_L1D)
-	      l1d_prefetcher_cache_fill(MSHR.entry[mshr_index].full_addr, set, way, (MSHR.entry[mshr_index].type == PREFETCH) ? 1 : 0, block[set][way].address<<LOG2_BLOCK_SIZE,
+	      l1d_prefetcher_cache_fill(MSHR.entry[mshr_index].full_addr, temp_set, way, (MSHR.entry[mshr_index].type == PREFETCH) ? 1 : 0, block[temp_set][way].address<<LOG2_BLOCK_SIZE,
 					MSHR.entry[mshr_index].pf_metadata);
 	    if  (cache_type == IS_L2C)
-	      MSHR.entry[mshr_index].pf_metadata = l2c_prefetcher_cache_fill(MSHR.entry[mshr_index].address<<LOG2_BLOCK_SIZE, set, way, (MSHR.entry[mshr_index].type == PREFETCH) ? 1 : 0,
-									     block[set][way].address<<LOG2_BLOCK_SIZE, MSHR.entry[mshr_index].pf_metadata);
+	      MSHR.entry[mshr_index].pf_metadata = l2c_prefetcher_cache_fill(MSHR.entry[mshr_index].address<<LOG2_BLOCK_SIZE, temp_set, way, (MSHR.entry[mshr_index].type == PREFETCH) ? 1 : 0,
+									     block[temp_set][way].address<<LOG2_BLOCK_SIZE, MSHR.entry[mshr_index].pf_metadata);
             if (cache_type == IS_LLC)
 	      {
 		cpu = fill_cpu;
     // CHANGED HERE ALSO
 		MSHR.entry[mshr_index].pf_metadata = llc_prefetcher_cache_fill(MSHR.entry[mshr_index].address<<LOG2_BLOCK_SIZE, set, way, (MSHR.entry[mshr_index].type == PREFETCH) ? 1 : 0,
-									       block[set][way].address<<LOG2_BLOCK_SIZE, MSHR.entry[mshr_index].pf_metadata);
+									       block[temp_set][way].address<<LOG2_BLOCK_SIZE, MSHR.entry[mshr_index].pf_metadata);
 		cpu = 0;
 	      }
               
@@ -176,7 +179,7 @@ void CACHE::handle_fill()
             // RFO marks cache line dirty
             if (cache_type == IS_L1D) {
                 if (MSHR.entry[mshr_index].type == RFO)
-                    block[set][way].dirty = 1;
+                    block[temp_set][way].dirty = 1;
             }
 
             // check fill level
@@ -257,6 +260,7 @@ void CACHE::handle_writeback()
         // access cache
         uint32_t set = get_set(WQ.entry[index].address);
         temp_set=set;
+        real_set=set;
         int way = check_hit(&WQ.entry[index]);
         
         if (way >= 0) { // writeback hit (or RFO hit for L1D)
@@ -417,7 +421,8 @@ void CACHE::handle_writeback()
             else {
                 // find victim
                 uint32_t set = get_set(WQ.entry[index].address), way;
-                // temp_set=set;
+                 temp_set=set;
+                 real_set = set;
                 if (cache_type == IS_LLC) {
                     way = llc_find_victim(writeback_cpu, WQ.entry[index].instr_id, set, block[set], WQ.entry[index].ip, WQ.entry[index].full_addr, WQ.entry[index].type);
                 }
@@ -434,15 +439,15 @@ void CACHE::handle_writeback()
                 uint8_t  do_fill = 1;
 
                 // is this dirty?
-                if (block[set][way].dirty) {
+                if (block[temp_set][way].dirty) {
 
                     // check if the lower level WQ has enough room to keep this writeback request
                     if (lower_level) { 
-                        if (lower_level->get_occupancy(2, block[set][way].address) == lower_level->get_size(2, block[set][way].address)) {
+                        if (lower_level->get_occupancy(2, block[temp_set][way].address) == lower_level->get_size(2, block[temp_set][way].address)) {
 
                             // lower level WQ is full, cannot replace this victim
                             do_fill = 0;
-                            lower_level->increment_WQ_FULL(block[set][way].address);
+                            lower_level->increment_WQ_FULL(block[temp_set][way].address);
                             STALL[WQ.entry[index].type]++;
 
                             DP ( if (warmup_complete[writeback_cpu]) {
@@ -455,9 +460,9 @@ void CACHE::handle_writeback()
 
                             writeback_packet.fill_level = fill_level << 1;
                             writeback_packet.cpu = writeback_cpu;
-                            writeback_packet.address = block[set][way].address;
-                            writeback_packet.full_addr = block[set][way].full_addr;
-                            writeback_packet.data = block[set][way].data;
+                            writeback_packet.address = block[temp_set][way].address;
+                            writeback_packet.full_addr = block[temp_set][way].full_addr;
+                            writeback_packet.data = block[temp_set][way].data;
                             writeback_packet.instr_id = WQ.entry[index].instr_id;
                             writeback_packet.ip = 0;
                             writeback_packet.type = WRITEBACK;
@@ -487,8 +492,8 @@ void CACHE::handle_writeback()
                     if (cache_type == IS_LLC)
 		      {
 			cpu = writeback_cpu;
-			WQ.entry[index].pf_metadata =llc_prefetcher_cache_fill(WQ.entry[index].address<<LOG2_BLOCK_SIZE, set, way, 0,
-									       block[set][way].address<<LOG2_BLOCK_SIZE, WQ.entry[index].pf_metadata);
+			WQ.entry[index].pf_metadata =llc_prefetcher_cache_fill(WQ.entry[index].address<<LOG2_BLOCK_SIZE, temp_set, way, 0,
+									       block[temp_set][way].address<<LOG2_BLOCK_SIZE, WQ.entry[index].pf_metadata);
 			cpu = 0;
 		      }
 
@@ -503,10 +508,10 @@ void CACHE::handle_writeback()
                     sim_miss[writeback_cpu][WQ.entry[index].type]++;
                     sim_access[writeback_cpu][WQ.entry[index].type]++;
 
-                    fill_cache(set, way, &WQ.entry[index]);
+                    fill_cache(temp_set, way, &WQ.entry[index]);
 
                     // mark dirty
-                    block[set][way].dirty = 1; 
+                    block[temp_set][way].dirty = 1; 
 
                     // check fill level
                     if (WQ.entry[index].fill_level < fill_level) {
@@ -558,6 +563,7 @@ void CACHE::handle_read()
             // access cache
             uint32_t set = get_set(RQ.entry[index].address);
             temp_set=set;
+            real_set=set;
             int way = check_hit(&RQ.entry[index]);
             
             if (way >= 0) { // read hit
@@ -595,7 +601,7 @@ void CACHE::handle_read()
                     else if (cache_type == IS_LLC)
 		      {
 			cpu = read_cpu;
-			llc_prefetcher_operate(block[set][way].address<<LOG2_BLOCK_SIZE, RQ.entry[index].ip, 1, RQ.entry[index].type, 0);
+			llc_prefetcher_operate(block[temp_set][way].address<<LOG2_BLOCK_SIZE, RQ.entry[index].ip, 1, RQ.entry[index].type, 0);
 			cpu = 0;
 		      }
                 }
@@ -636,11 +642,11 @@ void CACHE::handle_read()
                 }
 
                 // update prefetch stats and reset prefetch bit
-                if (block[set][way].prefetch) {
+                if (block[temp_set][way].prefetch) {
                     pf_useful++;
-                    block[set][way].prefetch = 0;
+                    block[temp_set][way].prefetch = 0;
                 }
-                block[set][way].used = 1;
+                block[temp_set][way].used = 1;
 
                 HIT[RQ.entry[index].type]++;
                 ACCESS[RQ.entry[index].type]++;
@@ -862,6 +868,7 @@ void CACHE::handle_prefetch()
             // access cache
             uint32_t set = get_set(PQ.entry[index].address);
             temp_set=set;
+            real_set=set;
             int way = check_hit(&PQ.entry[index]);
             
             if (way >= 0) { // prefetch hit
@@ -888,7 +895,7 @@ void CACHE::handle_prefetch()
                     else if (cache_type == IS_LLC)
 		      {
 			cpu = prefetch_cpu;
-			PQ.entry[index].pf_metadata = llc_prefetcher_operate(block[set][way].address<<LOG2_BLOCK_SIZE, PQ.entry[index].ip, 1, PREFETCH, PQ.entry[index].pf_metadata);
+			PQ.entry[index].pf_metadata = llc_prefetcher_operate(block[temp_set][way].address<<LOG2_BLOCK_SIZE, PQ.entry[index].ip, 1, PREFETCH, PQ.entry[index].pf_metadata);
 			cpu = 0;
 		      }
 		  }
@@ -1067,8 +1074,15 @@ void CACHE::handle_prefetch()
 
 void CACHE::operate()
 {
-    
-    if(num_iterations%10000==0 && num_iterations>0){
+    hot_set=false;
+    handle_fill();
+    handle_writeback();
+    reads_available_this_cycle = MAX_READ;
+    handle_read();
+
+    if (PQ.occupancy && (reads_available_this_cycle > 0))
+        handle_prefetch();
+    if(num_iterations==100000 && num_iterations>0){
       
       
       
@@ -1095,7 +1109,7 @@ void CACHE::operate()
         
         for(int i=0;i<256;i++){
           int r=16;
-          //  r is for the lrun updation of corresponding cold sets to a hot set
+          //  r is for the lru updation of corresponding cold sets to a hot set
           hot[x[2048-i-1].second]++;
           int hot_set_num=x[2048-i-1].second;
           // for each hot we have 7 cold sets assigned using this map
@@ -1112,7 +1126,7 @@ void CACHE::operate()
               block[j][k].valid=false;
               // ** SHOULD THIS BE DONE IN SRRIP ALSO ?? 
               // LRU updation like we did in lru case
-              // block[j][k].lru=r++;
+              block[j][k].lru=r++;
             }
 
 
@@ -1122,13 +1136,13 @@ void CACHE::operate()
     }
     
 
-    handle_fill();
-    handle_writeback();
-    reads_available_this_cycle = MAX_READ;
-    handle_read();
+    // handle_fill();
+    // handle_writeback();
+    // reads_available_this_cycle = MAX_READ;
+    // handle_read();
 
-    if (PQ.occupancy && (reads_available_this_cycle > 0))
-        handle_prefetch();
+    // if (PQ.occupancy && (reads_available_this_cycle > 0))
+    //     handle_prefetch();
 }
 
 uint32_t CACHE::get_set(uint64_t address)
@@ -1199,6 +1213,7 @@ int CACHE::check_hit(PACKET *packet)
 {
     uint32_t set = get_set(packet->address);
     temp_set=set;
+    real_set=set;
     int match_way = -1;
 
     if (NUM_SET < set) {
@@ -1218,6 +1233,7 @@ int CACHE::check_hit(PACKET *packet)
     for (uint32_t way=0; way<num_way; way++) {
         if (block[set][way].valid && (block[set][way].tag == packet->address)) {
             temp_set=set;
+            real_set=set;
             match_way = way;
 
             DP ( if (warmup_complete[packet->cpu]) {
@@ -1244,6 +1260,7 @@ int CACHE::check_hit(PACKET *packet)
               cout << " full_addr: " << packet->full_addr << " tag: " << block[i][j].tag << " data: " << block[i][j].data << dec;
               cout << " set: " << set << " way: " << j << " lru: " << block[i][j].lru;
               cout << " event: " << packet->event_cycle << " cycle: " << current_core_cycle[cpu] << endl; });
+              real_set=set;
               temp_set=i;
               return j;
           }
