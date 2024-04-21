@@ -6,7 +6,8 @@ map<int,int> hot;
 map<int,int> cold;
 map<int,vector<int>> assigned;
 uint64_t l2pf_access = 0;
-
+uint32_t temp_set;
+int num_iterations;
 void CACHE::handle_fill()
 {
     // handle fill
@@ -1102,7 +1103,7 @@ void CACHE::operate()
             assigned[hot_set_num].push_back(x[j].second);
             cold[j]++;
             //  j=cold set number
-            for(int k=10;k<NUM_WAY;k++){
+            for(int k=9;k<NUM_WAY;k++){
               // k= way of that cold set assigned to hot set
               // ** DO READ THIS TO UNDERSTAND WHAT I DID
 
