@@ -3,7 +3,7 @@
 
 #include "memory_class.h"
 extern int num_iterations;
-extern map<int,int> access; //number of access of a specific set
+extern map<int,int> accessed; //number of access of a specific set
 extern map<int,int> hot;
 extern map<int,int> cold;
 extern map<int,vector<int>> assigned; //7 cold sets with 7 ways corresponding to hot set
