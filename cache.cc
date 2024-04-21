@@ -866,7 +866,7 @@ void CACHE::handle_prefetch()
 
                 // update replacement policy
                 if (cache_type == IS_LLC) {
-                    llc_update_replacement_state(prefetch_cpu, set, way, block[temp_set][way].full_addr, PQ.entry[index].ip, 0, PQ.entry[index].type, 1);
+                    llc_update_replacement_state(prefetch_cpu, temp_set, way, block[temp_set][way].full_addr, PQ.entry[index].ip, 0, PQ.entry[index].type, 1);
 
                 }
                 else
