@@ -1,6 +1,7 @@
+#include<bits/stdc++.h>
 #include "cache.h"
 #include "set.h"
-map<int,int> access;
+map<int,int> accessed;
 map<int,int> hot;
 map<int,int> cold;
 map<int,vector<int>> assigned;
@@ -31,7 +32,7 @@ void CACHE::handle_fill()
         // find victim
         uint32_t set = get_set(MSHR.entry[mshr_index].address), way;
         temp_set=set;
-        access[set]++;
+        accessed[set]++;
         if (cache_type == IS_LLC) {
             way = llc_find_victim(fill_cpu, MSHR.entry[mshr_index].instr_id, set, block[set], MSHR.entry[mshr_index].ip, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].type);
         }
@@ -1085,9 +1086,9 @@ void CACHE::operate()
       // }
 
 
-        vector<int,int> x;
-        for(auto it=access.begin();it!=access.end();it++){
-          x.push_back(it->second,it->first);
+        vector<pair<int,int>> x;
+        for(auto it=accessed.begin();it!=accessed.end();it++){
+          x.push_back({it->second,it->first});
         }
         sort(x.begin(),x.end());
         
@@ -1098,7 +1099,7 @@ void CACHE::operate()
           int hot_set_num=x[2048-i-1].second;
           // for each hot we have 7 cold sets assigned using this map
           for(int j=i*7;j<i*7+7 && j<2048;j++){
-            assigned[hot_set_num].push_back(x[j]);
+            assigned[hot_set_num].push_back(x[j].second);
             cold[j]++;
             //  j=cold set number
             for(int k=10;k<NUM_WAY;k++){
